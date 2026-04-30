@@ -1,0 +1,51 @@
+import { createContext } from 'react'
+import type { Forecast, Prediction, UserProfile } from '../types'
+
+export type CreateForecastDraft = {
+  title: string
+  description: string
+  category: string
+  optionA: string
+  optionB: string
+  endsAt: number
+  resolutionCriteria: string
+  /** data:image/… from FileReader */
+  mediaImageDataUrl?: string | null
+  /** `URL.createObjectURL` from user video — session only */
+  mediaVideoObjectUrl?: string | null
+}
+
+export type AppStateValue = {
+  user: UserProfile
+  forecasts: Forecast[]
+  predictions: Prediction[]
+  rankedForecastIds: string[]
+  dailyStreakDay: number
+  dailyStreakReward: number
+  canClaimDailyStreak: boolean
+  pendingLeaderboardRewards: {
+    id: string
+    boardId: string
+    boardTitle: string
+    place: 1 | 2 | 3
+    rewardCoins: number
+    cadence: 'daily' | 'weekly'
+    cycleEndsAt: number
+    collected: boolean
+  }[]
+  setInterests: (cats: string[]) => void
+  updateUsername: (nextUsername: string) => boolean
+  addCoins: (n: number) => void
+  claimDailyStreak: () => { ok: boolean; reward: number; day: number }
+  collectLeaderboardReward: (rewardId: string) => boolean
+  placeStake: (forecastId: string, optionId: string, stake: number) => boolean
+  createForecast: (draft: CreateForecastDraft) => void
+  toggleLove: (forecastId: string) => void
+  lovedIds: Set<string>
+  ftueDone: boolean
+  completeFtue: () => void
+  purchaseAvatar: (avatarId: string) => boolean
+  equipAvatar: (avatarId: string) => boolean
+}
+
+export const AppStateContext = createContext<AppStateValue | null>(null)
