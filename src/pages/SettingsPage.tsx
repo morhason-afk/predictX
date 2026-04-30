@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AVATAR_CATALOG } from '../data/avatarCatalog'
 import { useAppState } from '../context/useAppState'
 import { UserAvatar } from '../components/UserAvatar'
@@ -150,6 +151,14 @@ export function SettingsPage() {
               </a>
             ))}
           </div>
+        </section>
+
+        <section className="settings-social">
+          <h2 className="section-title">Team</h2>
+          <p className="muted small">Open the daily KPI analytics dashboard.</p>
+          <Link to="/analytics" className="btn-ghost settings-social__link">
+            Open analytics dashboard
+          </Link>
         </section>
       </div>
     </div>

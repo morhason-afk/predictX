@@ -4,13 +4,6 @@ import { useAppState } from '../context/useAppState'
 import { BundleTierArt } from '../components/store/BundleTierArt'
 import { CoinIcon } from '../components/icons/CoinIcon'
 
-const PACKS = [
-  { id: 'p1', coins: 1200, price: '$4.99', label: 'Starter surge', tier: 0 as const },
-  { id: 'p2', coins: 3500, price: '$9.99', label: 'Savant pack', tier: 1 as const },
-  { id: 'p3', coins: 9000, price: '$19.99', label: 'Crew crate', tier: 2 as const },
-] as const
-const STREAK_REWARDS = [100, 150, 225, 325, 450, 600, 750] as const
-
 type Tab = 'prices' | 'rewards' | 'orders'
 
 export function StorePage() {
@@ -21,6 +14,8 @@ export function StorePage() {
     dailyStreakReward,
     canClaimDailyStreak,
     claimDailyStreak,
+    storeOffers,
+    streakRewards,
   } = useAppState()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = searchParams.get('tab')
@@ -60,7 +55,7 @@ export function StorePage() {
       <div className="mobile-screen__scroll">
         {tab === 'prices' && (
           <div className="store-grid">
-            {PACKS.map((p) => (
+            {storeOffers.map((p) => (
               <div key={p.id} className="store-card">
                 <div className="store-card__visual" aria-hidden>
                   <BundleTierArt tier={p.tier} />
@@ -84,7 +79,7 @@ export function StorePage() {
                 Miss one day and your streak resets to Day 1.
               </p>
               <div className="streak-grid" role="list" aria-label="7 day streak rewards">
-                {STREAK_REWARDS.map((reward, idx) => {
+                {streakRewards.map((reward, idx) => {
                   const day = idx + 1
                   const collected = day <= collectedCount
                   const today = canClaimDailyStreak && day === dailyStreakDay

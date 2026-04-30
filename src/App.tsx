@@ -1,6 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppStateProvider } from './context/AppStateProvider'
 import { AppShell } from './layout/AppShell'
+import { AnalyticsPage } from './pages/AnalyticsPage'
+import { BackofficePage } from './pages/BackofficePage'
 import { CreateForecastPage } from './pages/CreateForecastPage'
 import { FeedPage } from './pages/FeedPage'
 import { LeaderboardsPage } from './pages/LeaderboardsPage'
@@ -22,6 +24,8 @@ export default function App() {
             <Route path="profile" element={<ProfilePage />} />
             <Route path="store" element={<StorePage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="backoffice" element={<BackofficePage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

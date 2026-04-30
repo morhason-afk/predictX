@@ -55,6 +55,12 @@ export function AppShell() {
           <Link to="/settings" className="side-menu__item" onClick={closeMenu}>
             Settings
           </Link>
+          <Link to="/backoffice" className="side-menu__item" onClick={closeMenu}>
+            Backoffice
+          </Link>
+          <Link to="/analytics" className="side-menu__item" onClick={closeMenu}>
+            Data
+          </Link>
           <button type="button" className="side-menu__item is-disabled" disabled>
             Clans <span className="side-menu__badge">Coming soon</span>
           </button>

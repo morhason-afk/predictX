@@ -16,7 +16,7 @@ function formatTimeLeft(endsAt: number, now: number) {
 }
 
 export function LeaderboardsPage() {
-  const { pendingLeaderboardRewards, collectLeaderboardReward } = useAppState()
+  const { pendingLeaderboardRewards, collectLeaderboardReward, leaderboardRewards } = useAppState()
   const [now, setNow] = useState(() => Date.now())
   const unclaimedRewards = pendingLeaderboardRewards.filter((r) => !r.collected)
 
@@ -63,6 +63,13 @@ export function LeaderboardsPage() {
 
         {LEADERBOARD_SECTIONS.map((section) => (
           <section key={section.id} className="lb-section">
+            {/*
+              Backoffice reward overrides apply immediately for display and payouts.
+            */}
+            {(() => {
+              const rewards = leaderboardRewards[section.id] ?? section.rewards
+              return (
+                <>
             <div className="lb-section__head">
               <h2 className="lb-section__title">{section.title}</h2>
               <span className={`lb-timer${section.endsAt <= now ? ' is-finished' : ''}`}>
@@ -72,13 +79,13 @@ export function LeaderboardsPage() {
             <p className="lb-section__rule">{section.rule}</p>
             <p className="lb-prizes">
               <span className="coin-inline">
-                #1 <CoinIcon className="coin-inline__icon" /> {section.rewards.first}
+                #1 <CoinIcon className="coin-inline__icon" /> {rewards.first}
               </span>
               <span className="coin-inline">
-                #2 <CoinIcon className="coin-inline__icon" /> {section.rewards.second}
+                #2 <CoinIcon className="coin-inline__icon" /> {rewards.second}
               </span>
               <span className="coin-inline">
-                #3 <CoinIcon className="coin-inline__icon" /> {section.rewards.third}
+                #3 <CoinIcon className="coin-inline__icon" /> {rewards.third}
               </span>
             </p>
             <ol className="lb-top3">
@@ -93,6 +100,9 @@ export function LeaderboardsPage() {
                 </li>
               ))}
             </ol>
+                </>
+              )
+            })()}
           </section>
         ))}
       </div>

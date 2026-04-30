@@ -6,7 +6,7 @@ import { CoinIcon } from './icons/CoinIcon'
 const CATEGORIES = ['Sports', 'Politics', 'Crypto', 'Pop Culture', 'Personal'] as const
 
 export function FtueOverlay() {
-  const { setInterests, addCoins, completeFtue } = useAppState()
+  const { setInterests, addCoins, completeFtue, welcomeBonusCoins } = useAppState()
   const [step, setStep] = useState(0)
   const [picked, setPicked] = useState<string[]>(['Sports'])
 
@@ -84,12 +84,12 @@ export function FtueOverlay() {
               type="button"
               className="ftue__primary"
               onClick={() => {
-                addCoins(500)
+                addCoins(welcomeBonusCoins)
                 completeFtue()
               }}
             >
               <span className="coin-inline">
-                Collect <CoinIcon className="coin-inline__icon" /> 500 X-Coins
+                Collect <CoinIcon className="coin-inline__icon" /> {welcomeBonusCoins} X-Coins
               </span>
             </button>
           </>

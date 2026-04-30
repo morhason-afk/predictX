@@ -15,6 +15,14 @@ export type CreateForecastDraft = {
   mediaVideoObjectUrl?: string | null
 }
 
+export type StoreOffer = {
+  id: string
+  label: string
+  coins: number
+  price: string
+  tier: 0 | 1 | 2
+}
+
 export type AppStateValue = {
   user: UserProfile
   forecasts: Forecast[]
@@ -23,6 +31,10 @@ export type AppStateValue = {
   dailyStreakDay: number
   dailyStreakReward: number
   canClaimDailyStreak: boolean
+  welcomeBonusCoins: number
+  streakRewards: number[]
+  storeOffers: StoreOffer[]
+  leaderboardRewards: Record<string, { first: number; second: number; third: number }>
   pendingLeaderboardRewards: {
     id: string
     boardId: string
@@ -35,6 +47,11 @@ export type AppStateValue = {
   }[]
   setInterests: (cats: string[]) => void
   updateUsername: (nextUsername: string) => boolean
+  updateWelcomeBonusCoins: (coins: number) => void
+  updateStreakRewardForDay: (day: number, coins: number) => void
+  updateLeaderboardReward: (boardId: string, place: 1 | 2 | 3, coins: number) => void
+  reorderStoreOffers: (fromIndex: number, toIndex: number) => void
+  updateStoreOffer: (offerId: string, patch: Partial<Pick<StoreOffer, 'label' | 'coins' | 'price' | 'tier'>>) => void
   addCoins: (n: number) => void
   claimDailyStreak: () => { ok: boolean; reward: number; day: number }
   collectLeaderboardReward: (rewardId: string) => boolean

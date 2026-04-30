@@ -12,13 +12,28 @@ import { AVATAR_CATALOG, FREE_AVATAR_IDS, getAvatarGlyph } from '../data/avatarC
 import { demoVideoForIndex } from '../lib/demoVideos'
 import { rankForecasts } from '../lib/savantFeed'
 import { LEADERBOARD_SECTIONS } from '../data/leaderboardMock'
-import { AppStateContext, type CreateForecastDraft } from './AppStateContext'
+import { AppStateContext, type CreateForecastDraft, type StoreOffer } from './AppStateContext'
 
 const AVATAR_STORAGE_KEY = 'predictx_avatars'
 const PROFILE_STORAGE_KEY = 'predictx_profile'
 const STREAK_STORAGE_KEY = 'predictx_daily_streak'
 const LEADERBOARD_REWARDS_STORAGE_KEY = 'predictx_leaderboard_rewards'
-const STREAK_REWARDS = [100, 150, 225, 325, 450, 600, 750] as const
+const BACKOFFICE_STORAGE_KEY = 'predictx_backoffice'
+
+const DEFAULT_WELCOME_BONUS = 500
+const DEFAULT_STREAK_REWARDS = [100, 150, 225, 325, 450, 600, 750]
+const DEFAULT_STORE_OFFERS: StoreOffer[] = [
+  { id: 'p1', coins: 1200, price: '$4.99', label: 'Starter surge', tier: 0 },
+  { id: 'p2', coins: 3500, price: '$9.99', label: 'Savant pack', tier: 1 },
+  { id: 'p3', coins: 9000, price: '$19.99', label: 'Crew crate', tier: 2 },
+]
+
+type BackofficeConfig = {
+  welcomeBonusCoins: number
+  streakRewards: number[]
+  leaderboardRewards: Record<string, { first: number; second: number; third: number }>
+  storeOffers: StoreOffer[]
+}
 
 type DailyStreakState = {
   streak: number
@@ -87,6 +102,60 @@ function loadPendingLeaderboardRewards(): PendingLeaderboardReward[] {
 function savePendingLeaderboardRewards(rewards: PendingLeaderboardReward[]) {
   try {
     localStorage.setItem(LEADERBOARD_REWARDS_STORAGE_KEY, JSON.stringify(rewards))
+  } catch {
+    /* ignore */
+  }
+}
+
+function defaultLeaderboardRewards() {
+  const entries = LEADERBOARD_SECTIONS.map((board) => [board.id, board.rewards] as const)
+  return Object.fromEntries(entries)
+}
+
+function loadBackofficeConfig(): BackofficeConfig {
+  try {
+    const raw = localStorage.getItem(BACKOFFICE_STORAGE_KEY)
+    if (!raw) {
+      return {
+        welcomeBonusCoins: DEFAULT_WELCOME_BONUS,
+        streakRewards: [...DEFAULT_STREAK_REWARDS],
+        leaderboardRewards: defaultLeaderboardRewards(),
+        storeOffers: DEFAULT_STORE_OFFERS,
+      }
+    }
+    const parsed = JSON.parse(raw) as Partial<BackofficeConfig>
+    const welcomeBonusCoins = Math.max(0, Number(parsed.welcomeBonusCoins) || DEFAULT_WELCOME_BONUS)
+    const streakRewards = Array.isArray(parsed.streakRewards)
+      ? parsed.streakRewards.slice(0, 7).map((v, i) => Math.max(0, Number(v) || DEFAULT_STREAK_REWARDS[i]))
+      : [...DEFAULT_STREAK_REWARDS]
+    while (streakRewards.length < 7) streakRewards.push(DEFAULT_STREAK_REWARDS[streakRewards.length])
+    const leaderboardRewards = {
+      ...defaultLeaderboardRewards(),
+      ...(parsed.leaderboardRewards ?? {}),
+    }
+    const storeOffers = Array.isArray(parsed.storeOffers) && parsed.storeOffers.length > 0
+      ? parsed.storeOffers.map((o, i) => ({
+          id: o.id || `offer-${i}`,
+          label: o.label || `Offer ${i + 1}`,
+          coins: Math.max(1, Number(o.coins) || 1),
+          price: o.price || '$0.99',
+          tier: o.tier === 0 || o.tier === 1 || o.tier === 2 ? o.tier : 0,
+        }))
+      : DEFAULT_STORE_OFFERS
+    return { welcomeBonusCoins, streakRewards, leaderboardRewards, storeOffers }
+  } catch {
+    return {
+      welcomeBonusCoins: DEFAULT_WELCOME_BONUS,
+      streakRewards: [...DEFAULT_STREAK_REWARDS],
+      leaderboardRewards: defaultLeaderboardRewards(),
+      storeOffers: DEFAULT_STORE_OFFERS,
+    }
+  }
+}
+
+function saveBackofficeConfig(config: BackofficeConfig) {
+  try {
+    localStorage.setItem(BACKOFFICE_STORAGE_KEY, JSON.stringify(config))
   } catch {
     /* ignore */
   }
@@ -196,6 +265,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [pendingLeaderboardRewards, setPendingLeaderboardRewards] = useState<PendingLeaderboardReward[]>(
     () => loadPendingLeaderboardRewards(),
   )
+  const [backofficeConfig, setBackofficeConfig] = useState<BackofficeConfig>(() => loadBackofficeConfig())
 
   const [forecasts, setForecasts] = useState<Forecast[]>(MOCK_FORECASTS)
   const [predictions, setPredictions] = useState<Prediction[]>([])
@@ -217,6 +287,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [pendingLeaderboardRewards])
 
   useEffect(() => {
+    saveBackofficeConfig(backofficeConfig)
+  }, [backofficeConfig])
+
+  useEffect(() => {
     const now = Date.now()
     setPendingLeaderboardRewards((prev) => {
       const known = new Set(prev.map((r) => r.id))
@@ -226,12 +300,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         if (board.endsAt > now) return
         const winnerRow = board.rows.find((row) => row.username === user.username)
         if (!winnerRow) return
+        const boardRewards = backofficeConfig.leaderboardRewards[board.id] ?? board.rewards
         const rewardCoins =
           winnerRow.rank === 1
-            ? board.rewards.first
+            ? boardRewards.first
             : winnerRow.rank === 2
-              ? board.rewards.second
-              : board.rewards.third
+              ? boardRewards.second
+              : boardRewards.third
         const rewardId = `${board.id}:${board.endsAt}:${user.username}`
         if (known.has(rewardId)) return
         additions.push({
@@ -249,7 +324,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (additions.length === 0) return prev
       return [...additions, ...prev]
     })
-  }, [user.username])
+  }, [user.username, backofficeConfig.leaderboardRewards])
 
   const rankedForecastIds = useMemo(() => {
     const ranked = rankForecasts(forecasts, rankAt, user.interests)
@@ -270,6 +345,73 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setUser(next)
     return true
   }, [])
+
+  const updateWelcomeBonusCoins = useCallback((coins: number) => {
+    const nextCoins = Math.max(0, Math.floor(coins))
+    setBackofficeConfig((prev) => ({ ...prev, welcomeBonusCoins: nextCoins }))
+  }, [])
+
+  const updateStreakRewardForDay = useCallback((day: number, coins: number) => {
+    if (day < 1 || day > 7) return
+    const nextCoins = Math.max(0, Math.floor(coins))
+    setBackofficeConfig((prev) => {
+      const streakRewards = [...prev.streakRewards]
+      streakRewards[day - 1] = nextCoins
+      return { ...prev, streakRewards }
+    })
+  }, [])
+
+  const updateLeaderboardReward = useCallback((boardId: string, place: 1 | 2 | 3, coins: number) => {
+    const nextCoins = Math.max(0, Math.floor(coins))
+    setBackofficeConfig((prev) => {
+      const current = prev.leaderboardRewards[boardId] ?? { first: 0, second: 0, third: 0 }
+      const next = {
+        first: place === 1 ? nextCoins : current.first,
+        second: place === 2 ? nextCoins : current.second,
+        third: place === 3 ? nextCoins : current.third,
+      }
+      return {
+        ...prev,
+        leaderboardRewards: {
+          ...prev.leaderboardRewards,
+          [boardId]: next,
+        },
+      }
+    })
+  }, [])
+
+  const reorderStoreOffers = useCallback((fromIndex: number, toIndex: number) => {
+    setBackofficeConfig((prev) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= prev.storeOffers.length ||
+        toIndex >= prev.storeOffers.length
+      ) return prev
+      const next = [...prev.storeOffers]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      return { ...prev, storeOffers: next }
+    })
+  }, [])
+
+  const updateStoreOffer = useCallback(
+    (offerId: string, patch: Partial<Pick<StoreOffer, 'label' | 'coins' | 'price' | 'tier'>>) => {
+      setBackofficeConfig((prev) => ({
+        ...prev,
+        storeOffers: prev.storeOffers.map((o) =>
+          o.id !== offerId
+            ? o
+            : {
+                ...o,
+                ...patch,
+                coins: patch.coins == null ? o.coins : Math.max(1, Math.floor(patch.coins)),
+              },
+        ),
+      }))
+    },
+    [],
+  )
 
   const addCoins = useCallback((n: number) => {
     setUser((u) => {
@@ -292,7 +434,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     if (delta === 1) return Math.min(7, dailyStreak.streak + 1)
     return 1
   })()
-  const dailyStreakReward = STREAK_REWARDS[Math.max(0, previewDay - 1)]
+  const dailyStreakReward = backofficeConfig.streakRewards[Math.max(0, previewDay - 1)]
 
   const claimDailyStreak = useCallback(() => {
     const claimDay = localDayStamp()
@@ -306,7 +448,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const delta = dayDiff(prev.lastClaimDay, claimDay)
       if (delta === 1) nextDay = Math.min(7, prev.streak + 1)
     }
-    const reward = STREAK_REWARDS[Math.max(0, nextDay - 1)]
+    const reward = backofficeConfig.streakRewards[Math.max(0, nextDay - 1)]
 
     setDailyStreak({
       streak: nextDay,
@@ -314,7 +456,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     })
     addCoins(reward)
     return { ok: true, reward, day: nextDay }
-  }, [addCoins, dailyStreak])
+  }, [addCoins, dailyStreak, backofficeConfig.streakRewards])
 
   const collectLeaderboardReward = useCallback(
     (rewardId: string) => {
@@ -479,9 +621,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       dailyStreakDay: previewDay,
       dailyStreakReward,
       canClaimDailyStreak,
+      welcomeBonusCoins: backofficeConfig.welcomeBonusCoins,
+      streakRewards: backofficeConfig.streakRewards,
+      storeOffers: backofficeConfig.storeOffers,
+      leaderboardRewards: backofficeConfig.leaderboardRewards,
       pendingLeaderboardRewards,
       setInterests,
       updateUsername,
+      updateWelcomeBonusCoins,
+      updateStreakRewardForDay,
+      updateLeaderboardReward,
+      reorderStoreOffers,
+      updateStoreOffer,
       addCoins,
       claimDailyStreak,
       collectLeaderboardReward,
@@ -502,9 +653,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       previewDay,
       dailyStreakReward,
       canClaimDailyStreak,
+      backofficeConfig.welcomeBonusCoins,
+      backofficeConfig.streakRewards,
+      backofficeConfig.storeOffers,
+      backofficeConfig.leaderboardRewards,
       pendingLeaderboardRewards,
       setInterests,
       updateUsername,
+      updateWelcomeBonusCoins,
+      updateStreakRewardForDay,
+      updateLeaderboardReward,
+      reorderStoreOffers,
+      updateStoreOffer,
       addCoins,
       claimDailyStreak,
       collectLeaderboardReward,
