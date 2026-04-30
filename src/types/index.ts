@@ -29,6 +29,7 @@ export type Forecast = {
   engagementScore: number
   createdAt: number
   verifiedCreator?: boolean
+  resolvedOptionId?: string | null
 }
 
 export type Prediction = {

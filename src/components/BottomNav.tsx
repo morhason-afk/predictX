@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { IconCreate, IconHome, IconProfile, IconSearch, IconTrophy } from './icons/NavIcons'
+import { IconCreate, IconHistory, IconHome, IconSearch, IconTrophy } from './icons/NavIcons'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `bottom-nav__link${isActive ? ' is-active' : ''}`
@@ -23,9 +23,9 @@ export function BottomNav() {
         <IconTrophy />
         <span>Leaderboards</span>
       </NavLink>
-      <NavLink to="/profile" className={linkClass}>
-        <IconProfile />
-        <span>Profile</span>
+      <NavLink to="/history" className={linkClass}>
+        <IconHistory />
+        <span>History</span>
       </NavLink>
     </nav>
   )

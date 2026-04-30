@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ForecastCard } from '../components/ForecastCard'
 import { PromoBanner } from '../components/PromoBanner'
 import { useAppState } from '../context/useAppState'
@@ -6,6 +7,7 @@ import { FtueOverlay } from '../components/FtueOverlay'
 
 export function FeedPage() {
   const { forecasts, rankedForecastIds, ftueDone } = useAppState()
+  const [searchParams] = useSearchParams()
   const ordered = useMemo(() => {
     const map = new Map(forecasts.map((f) => [f.id, f]))
     return rankedForecastIds.map((id) => map.get(id)).filter(Boolean) as typeof forecasts
@@ -35,6 +37,17 @@ export function FeedPage() {
     root.querySelectorAll('[data-id]').forEach((el) => obs.observe(el))
     return () => obs.disconnect()
   }, [ordered])
+
+  useEffect(() => {
+    const forecastId = searchParams.get('forecast')
+    if (!forecastId) return
+    const root = containerRef.current
+    if (!root) return
+    const el = root.querySelector<HTMLElement>(`[data-id="${forecastId}"]`)
+    if (!el) return
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    setFocusId(forecastId)
+  }, [searchParams, ordered])
 
   return (
     <div className="feed-page feed-page--promo">

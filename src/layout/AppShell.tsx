@@ -15,7 +15,7 @@ export function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [inviteMsg, setInviteMsg] = useState<string | null>(null)
   const inviteText = 'Join me on PredictX and make your calls.'
-  const inviteUrl = 'https://predictx.app'
+  const inviteUrl = 'https://predict-x.netlify.app'
 
   const closeMenu = () => setMenuOpen(false)
 
@@ -54,6 +54,15 @@ export function AppShell() {
           </Link>
           <Link to="/settings" className="side-menu__item" onClick={closeMenu}>
             Settings
+          </Link>
+          <Link to="/profile" className="side-menu__item" onClick={closeMenu}>
+            Profile
+          </Link>
+          <Link to="/history" className="side-menu__item" onClick={closeMenu}>
+            Forecasts history
+          </Link>
+          <Link to="/settle-created-forecasts" className="side-menu__item" onClick={closeMenu}>
+            Settle created forecasts
           </Link>
           <Link to="/backoffice" className="side-menu__item" onClick={closeMenu}>
             Backoffice

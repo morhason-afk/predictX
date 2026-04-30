@@ -61,3 +61,18 @@ export function IconProfile({ size = 24, className }: P) {
     </svg>
   )
 }
+
+export function IconHistory({ size = 24, className }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden>
+      <path
+        d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4M12 8v4l3 2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}

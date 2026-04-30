@@ -5,9 +5,11 @@ import { AnalyticsPage } from './pages/AnalyticsPage'
 import { BackofficePage } from './pages/BackofficePage'
 import { CreateForecastPage } from './pages/CreateForecastPage'
 import { FeedPage } from './pages/FeedPage'
+import { ForecastHistoryPage } from './pages/ForecastHistoryPage'
 import { LeaderboardsPage } from './pages/LeaderboardsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { SearchPage } from './pages/SearchPage'
+import { SettleCreatedForecastsPage } from './pages/SettleCreatedForecastsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { StorePage } from './pages/StorePage'
 
@@ -21,11 +23,13 @@ export default function App() {
             <Route path="search" element={<SearchPage />} />
             <Route path="create" element={<CreateForecastPage />} />
             <Route path="leaderboards" element={<LeaderboardsPage />} />
+            <Route path="history" element={<ForecastHistoryPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="store" element={<StorePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="backoffice" element={<BackofficePage />} />
+            <Route path="settle-created-forecasts" element={<SettleCreatedForecastsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

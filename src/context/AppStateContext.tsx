@@ -35,6 +35,13 @@ export type AppStateValue = {
   streakRewards: number[]
   storeOffers: StoreOffer[]
   leaderboardRewards: Record<string, { first: number; second: number; third: number }>
+  pendingForecastRewards: {
+    id: string
+    forecastId: string
+    forecastTitle: string
+    rewardCoins: number
+    collected: boolean
+  }[]
   pendingLeaderboardRewards: {
     id: string
     boardId: string
@@ -54,7 +61,9 @@ export type AppStateValue = {
   updateStoreOffer: (offerId: string, patch: Partial<Pick<StoreOffer, 'label' | 'coins' | 'price' | 'tier'>>) => void
   addCoins: (n: number) => void
   claimDailyStreak: () => { ok: boolean; reward: number; day: number }
+  collectForecastReward: (rewardId: string) => boolean
   collectLeaderboardReward: (rewardId: string) => boolean
+  settleForecast: (forecastId: string, winningOptionId: string) => boolean
   placeStake: (forecastId: string, optionId: string, stake: number) => boolean
   createForecast: (draft: CreateForecastDraft) => void
   toggleLove: (forecastId: string) => void

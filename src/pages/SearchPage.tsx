@@ -57,7 +57,7 @@ export function SearchPage() {
         <ul className="result-list">
           {list.map((f) => (
             <li key={f.id}>
-              <Link to="/" className="result-card">
+              <Link to={`/?forecast=${encodeURIComponent(f.id)}`} className="result-card">
                 <div className="result-card__thumb" style={{ background: f.mediaBackdrop }} />
                 <div className="result-card__body">
                   <span className="result-card__cat">{f.category}</span>

@@ -8,6 +8,7 @@ import { useAppState } from '../context/useAppState'
 import { UserAvatar } from './UserAvatar'
 
 const DESCRIPTION_EXPAND_THRESHOLD = 140
+const SHARE_BASE_URL = 'https://predict-x.netlify.app'
 
 function formatEnds(endsAt: number) {
   const d = new Date(endsAt)
@@ -20,10 +21,12 @@ type Props = {
 }
 
 export function ForecastCard({ forecast: f, active }: Props) {
-  const { toggleLove, lovedIds } = useAppState()
+  const { user, toggleLove, lovedIds, settleForecast } = useAppState()
   const loved = lovedIds.has(f.id)
   const [sheetOption, setSheetOption] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [settleOpen, setSettleOpen] = useState(false)
   const [descOpen, setDescOpen] = useState(false)
   const [videoBroken, setVideoBroken] = useState(false)
   const touchStart = useRef<{ x: number; y: number } | null>(null)
@@ -70,6 +73,20 @@ export function ForecastCard({ forecast: f, active }: Props) {
 
   const shareA = optionShare(f.options[0], f.options)
   const shareB = f.options[1] ? optionShare(f.options[1], f.options) : 0
+  const isCreator = f.creatorId === user.uid
+  const canSettle = isCreator && f.status === 'open'
+  const shareUrl = `${SHARE_BASE_URL}/?forecast=${encodeURIComponent(f.id)}`
+  const shareText = `Check this prediction on PredictX: "${f.title}"`
+
+  const copyShareLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setToast('Share link copied.')
+    } catch {
+      setToast('Could not copy link on this device.')
+    }
+    setShareOpen(false)
+  }, [shareUrl])
 
   return (
     <article className={`forecast-card${active ? ' is-active' : ''}`}>
@@ -147,7 +164,7 @@ export function ForecastCard({ forecast: f, active }: Props) {
           >
             ♥
           </button>
-          <button type="button" className="side-btn" aria-label="Share" onClick={() => setToast('Link copied (demo)')}>
+          <button type="button" className="side-btn" aria-label="Share" onClick={() => setShareOpen(true)}>
             ↗
           </button>
           <button type="button" className="side-btn" aria-label="Repost" onClick={() => setToast('Reposted to your crew (demo)')}>
@@ -184,6 +201,16 @@ export function ForecastCard({ forecast: f, active }: Props) {
           <p className="forecast-card__resolve">
             Resolves {formatEnds(f.endsAt)} · {f.resolutionCriteria}
           </p>
+          {canSettle && (
+            <button type="button" className="forecast-card__settle-btn" onClick={() => setSettleOpen(true)}>
+              Settle forecast
+            </button>
+          )}
+          {f.status === 'resolved' && f.resolvedOptionId && (
+            <p className="forecast-card__settled-note">
+              Settled winner: {f.options.find((o) => o.id === f.resolvedOptionId)?.text ?? 'Winner selected'}
+            </p>
+          )}
           <div className="forecast-card__sentiment">
             <button type="button" className="sentiment sentiment--a" onClick={() => setSheetOption(f.options[0].id)}>
               <span>{f.options[0].text}</span>
@@ -209,6 +236,41 @@ export function ForecastCard({ forecast: f, active }: Props) {
         </div>
       )}
 
+      {shareOpen && (
+        <div className="forecast-share-sheet" role="dialog" aria-modal="true" aria-label="Share forecast">
+          <button
+            type="button"
+            className="forecast-share-sheet__scrim"
+            aria-label="Close share options"
+            onClick={() => setShareOpen(false)}
+          />
+          <div className="forecast-share-sheet__panel">
+            <strong>Share prediction</strong>
+            <div className="forecast-share-sheet__actions">
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-ghost"
+                onClick={() => setShareOpen(false)}
+              >
+                WhatsApp
+              </a>
+              <a
+                href={`mailto:?subject=${encodeURIComponent('PredictX prediction')}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`}
+                className="btn-ghost"
+                onClick={() => setShareOpen(false)}
+              >
+                Email
+              </a>
+              <button type="button" className="btn-ghost" onClick={copyShareLink}>
+                Copy link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sheetOption && (
         <StakeSheet
           forecast={f}
@@ -219,6 +281,36 @@ export function ForecastCard({ forecast: f, active }: Props) {
             setToast('Staked! Good luck, savant.')
           }}
         />
+      )}
+
+      {settleOpen && (
+        <div className="forecast-share-sheet" role="dialog" aria-modal="true" aria-label="Settle forecast">
+          <button
+            type="button"
+            className="forecast-share-sheet__scrim"
+            aria-label="Close settle options"
+            onClick={() => setSettleOpen(false)}
+          />
+          <div className="forecast-share-sheet__panel">
+            <strong>Settle forecast (creator)</strong>
+            <div className="forecast-share-sheet__actions">
+              {f.options.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => {
+                    const ok = settleForecast(f.id, o.id)
+                    setSettleOpen(false)
+                    setToast(ok ? `Settled: ${o.text}` : 'Could not settle this forecast.')
+                  }}
+                >
+                  Winner: {o.text}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </article>
   )

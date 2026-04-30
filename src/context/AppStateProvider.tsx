@@ -18,6 +18,7 @@ const AVATAR_STORAGE_KEY = 'predictx_avatars'
 const PROFILE_STORAGE_KEY = 'predictx_profile'
 const STREAK_STORAGE_KEY = 'predictx_daily_streak'
 const LEADERBOARD_REWARDS_STORAGE_KEY = 'predictx_leaderboard_rewards'
+const FORECAST_REWARDS_STORAGE_KEY = 'predictx_forecast_rewards'
 const BACKOFFICE_STORAGE_KEY = 'predictx_backoffice'
 
 const DEFAULT_WELCOME_BONUS = 500
@@ -48,6 +49,14 @@ type PendingLeaderboardReward = {
   rewardCoins: number
   cadence: 'daily' | 'weekly'
   cycleEndsAt: number
+  collected: boolean
+}
+
+type PendingForecastReward = {
+  id: string
+  forecastId: string
+  forecastTitle: string
+  rewardCoins: number
   collected: boolean
 }
 
@@ -102,6 +111,26 @@ function loadPendingLeaderboardRewards(): PendingLeaderboardReward[] {
 function savePendingLeaderboardRewards(rewards: PendingLeaderboardReward[]) {
   try {
     localStorage.setItem(LEADERBOARD_REWARDS_STORAGE_KEY, JSON.stringify(rewards))
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadPendingForecastRewards(): PendingForecastReward[] {
+  try {
+    const raw = localStorage.getItem(FORECAST_REWARDS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as PendingForecastReward[]
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((r) => typeof r.id === 'string' && typeof r.rewardCoins === 'number')
+  } catch {
+    return []
+  }
+}
+
+function savePendingForecastRewards(rewards: PendingForecastReward[]) {
+  try {
+    localStorage.setItem(FORECAST_REWARDS_STORAGE_KEY, JSON.stringify(rewards))
   } catch {
     /* ignore */
   }
@@ -265,6 +294,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [pendingLeaderboardRewards, setPendingLeaderboardRewards] = useState<PendingLeaderboardReward[]>(
     () => loadPendingLeaderboardRewards(),
   )
+  const [pendingForecastRewards, setPendingForecastRewards] = useState<PendingForecastReward[]>(
+    () => loadPendingForecastRewards(),
+  )
   const [backofficeConfig, setBackofficeConfig] = useState<BackofficeConfig>(() => loadBackofficeConfig())
 
   const [forecasts, setForecasts] = useState<Forecast[]>(MOCK_FORECASTS)
@@ -285,6 +317,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     savePendingLeaderboardRewards(pendingLeaderboardRewards)
   }, [pendingLeaderboardRewards])
+
+  useEffect(() => {
+    savePendingForecastRewards(pendingForecastRewards)
+  }, [pendingForecastRewards])
 
   useEffect(() => {
     saveBackofficeConfig(backofficeConfig)
@@ -477,6 +513,79 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [addCoins],
   )
 
+  const collectForecastReward = useCallback(
+    (rewardId: string) => {
+      let claimed = 0
+      setPendingForecastRewards((prev) =>
+        prev.map((reward) => {
+          if (reward.id !== rewardId || reward.collected) return reward
+          claimed = reward.rewardCoins
+          return { ...reward, collected: true }
+        }),
+      )
+      if (claimed > 0) {
+        addCoins(claimed)
+        return true
+      }
+      return false
+    },
+    [addCoins],
+  )
+
+  const settleForecast = useCallback((forecastId: string, winningOptionId: string) => {
+    const currentUser = userRef.current
+    let changed = false
+    let settledTitle = ''
+    let totalPool = 0
+    let winningPool = 0
+    setForecasts((prev) =>
+      prev.map((f) => {
+        if (f.id !== forecastId) return f
+        if (f.creatorId !== currentUser.uid || f.status !== 'open') return f
+        const winner = f.options.find((o) => o.id === winningOptionId)
+        if (!winner) return f
+        changed = true
+        settledTitle = f.title
+        totalPool = f.options.reduce((sum, o) => sum + o.totalWeight, 0)
+        winningPool = winner.totalWeight
+        return {
+          ...f,
+          status: 'resolved',
+          resolvedOptionId: winningOptionId,
+        }
+      }),
+    )
+    if (!changed || winningPool <= 0 || totalPool <= 0) return changed
+
+    const winnerBets = predictions.filter(
+      (p) =>
+        p.userId === currentUser.uid &&
+        p.forecastId === forecastId &&
+        p.optionId === winningOptionId,
+    )
+    const payoutTotal = winnerBets.reduce(
+      (sum, p) => sum + Math.round((p.stake / winningPool) * totalPool),
+      0,
+    )
+    if (payoutTotal <= 0) return changed
+
+    const rewardId = `forecast:${forecastId}:${winningOptionId}:${currentUser.uid}`
+    setPendingForecastRewards((prev) => {
+      if (prev.some((r) => r.id === rewardId)) return prev
+      return [
+        {
+          id: rewardId,
+          forecastId,
+          forecastTitle: settledTitle || 'Settled forecast',
+          rewardCoins: payoutTotal,
+          collected: false,
+        },
+        ...prev,
+      ]
+    })
+    return changed
+  }, [predictions])
+
   const placeStake = useCallback((forecastId: string, optionId: string, stake: number) => {
     if (stake <= 0) return false
     const u = userRef.current
@@ -625,6 +734,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       streakRewards: backofficeConfig.streakRewards,
       storeOffers: backofficeConfig.storeOffers,
       leaderboardRewards: backofficeConfig.leaderboardRewards,
+      pendingForecastRewards,
       pendingLeaderboardRewards,
       setInterests,
       updateUsername,
@@ -635,7 +745,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       updateStoreOffer,
       addCoins,
       claimDailyStreak,
+      collectForecastReward,
       collectLeaderboardReward,
+      settleForecast,
       placeStake,
       createForecast,
       toggleLove,
@@ -657,6 +769,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       backofficeConfig.streakRewards,
       backofficeConfig.storeOffers,
       backofficeConfig.leaderboardRewards,
+      pendingForecastRewards,
       pendingLeaderboardRewards,
       setInterests,
       updateUsername,
@@ -667,7 +780,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       updateStoreOffer,
       addCoins,
       claimDailyStreak,
+      collectForecastReward,
       collectLeaderboardReward,
+      settleForecast,
       placeStake,
       createForecast,
       toggleLove,

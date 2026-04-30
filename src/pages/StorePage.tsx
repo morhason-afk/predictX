@@ -16,6 +16,8 @@ export function StorePage() {
     claimDailyStreak,
     storeOffers,
     streakRewards,
+    pendingForecastRewards,
+    collectForecastReward,
   } = useAppState()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = searchParams.get('tab')
@@ -23,6 +25,7 @@ export function StorePage() {
     initialTab === 'rewards' || initialTab === 'orders' ? initialTab : 'prices',
   )
   const collectedCount = canClaimDailyStreak ? Math.max(0, dailyStreakDay - 1) : dailyStreakDay
+  const unclaimedForecastRewards = pendingForecastRewards.filter((r) => !r.collected)
   const setTabAndQuery = (next: Tab) => {
     setTab(next)
     if (next === 'prices') setSearchParams({})
@@ -72,6 +75,32 @@ export function StorePage() {
 
         {tab === 'rewards' && (
           <div className="rewards-block">
+            <div className="daily-card">
+              <h3>Forecast winnings</h3>
+              {unclaimedForecastRewards.length === 0 ? (
+                <p>No winnings to collect yet.</p>
+              ) : (
+                <div className="lb-rewards">
+                  {unclaimedForecastRewards.map((reward) => (
+                    <div key={reward.id} className="lb-reward">
+                      <div className="lb-reward__main">
+                        <strong>{reward.forecastTitle}</strong>
+                        <span>Winner payout from settled forecast</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-buy lb-reward__btn"
+                        onClick={() => collectForecastReward(reward.id)}
+                      >
+                        <span className="coin-inline">
+                          Collect <CoinIcon className="coin-inline__icon" /> {reward.rewardCoins}
+                        </span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="daily-card">
               <h3>Streak bonus</h3>
               <p>
