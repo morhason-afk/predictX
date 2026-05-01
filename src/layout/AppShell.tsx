@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
 import { BottomNav } from '../components/BottomNav'
 import { TopHUD } from '../components/TopHUD'
+import { useAppState } from '../context/useAppState'
 
 const SOCIAL_LINKS = [
   { id: 'instagram', label: 'Instagram', href: 'https://instagram.com/predictx' },
@@ -12,6 +13,9 @@ const SOCIAL_LINKS = [
 ] as const
 
 export function AppShell() {
+  const { expiredCreatedSettleCount, resolvedParticipatedCount } = useAppState()
+  const needsSettle = expiredCreatedSettleCount > 0
+  const needsHistoryAlert = resolvedParticipatedCount > 0
   const [menuOpen, setMenuOpen] = useState(false)
   const [inviteMsg, setInviteMsg] = useState<string | null>(null)
   const inviteText = 'Join me on PredictX and make your calls.'
@@ -58,11 +62,31 @@ export function AppShell() {
           <Link to="/profile" className="side-menu__item" onClick={closeMenu}>
             Profile
           </Link>
-          <Link to="/history" className="side-menu__item" onClick={closeMenu}>
-            Forecasts history
+          <Link
+            to="/history"
+            className={`side-menu__item${needsHistoryAlert ? ' has-alert' : ''}`}
+            onClick={closeMenu}
+            aria-label={needsHistoryAlert ? 'Forecasts history — action needed' : undefined}
+          >
+            <span>Forecasts history</span>
+            {needsHistoryAlert && (
+              <span className="side-menu__alert-mark" aria-hidden>
+                !
+              </span>
+            )}
           </Link>
-          <Link to="/settle-created-forecasts" className="side-menu__item" onClick={closeMenu}>
-            Settle created forecasts
+          <Link
+            to="/settle-created-forecasts"
+            className={`side-menu__item${needsSettle ? ' has-alert' : ''}`}
+            onClick={closeMenu}
+            aria-label={needsSettle ? 'Settle created forecasts — action needed' : undefined}
+          >
+            <span>Settle created forecasts</span>
+            {needsSettle && (
+              <span className="side-menu__alert-mark" aria-hidden>
+                !
+              </span>
+            )}
           </Link>
           <Link to="/backoffice" className="side-menu__item" onClick={closeMenu}>
             Backoffice

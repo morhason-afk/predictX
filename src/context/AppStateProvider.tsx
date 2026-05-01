@@ -9,9 +9,21 @@ import {
 import type { Forecast, Prediction, UserProfile } from '../types'
 import { MOCK_FORECASTS } from '../data/mockForecasts'
 import { AVATAR_CATALOG, FREE_AVATAR_IDS, getAvatarGlyph } from '../data/avatarCatalog'
+import {
+  cloneDefaultLeaderboardSections,
+  LEADERBOARD_SECTIONS,
+  type LeaderboardSection,
+} from '../data/leaderboardMock'
 import { demoVideoForIndex } from '../lib/demoVideos'
+import { getOrCreateAnonUid } from '../lib/deviceIdentity'
 import { rankForecasts } from '../lib/savantFeed'
-import { LEADERBOARD_SECTIONS } from '../data/leaderboardMock'
+import {
+  fetchSharedGlobalPayload,
+  isSharedCloudMode,
+  subscribeSharedGlobal,
+  upsertSharedGlobalPayload,
+  type SharedGlobalPayload,
+} from '../lib/sharedCloud'
 import { AppStateContext, type CreateForecastDraft, type StoreOffer } from './AppStateContext'
 
 const AVATAR_STORAGE_KEY = 'predictx_avatars'
@@ -20,6 +32,7 @@ const STREAK_STORAGE_KEY = 'predictx_daily_streak'
 const LEADERBOARD_REWARDS_STORAGE_KEY = 'predictx_leaderboard_rewards'
 const FORECAST_REWARDS_STORAGE_KEY = 'predictx_forecast_rewards'
 const BACKOFFICE_STORAGE_KEY = 'predictx_backoffice'
+const APP_STATE_STORAGE_KEY = 'predictx_app_state'
 
 const DEFAULT_WELCOME_BONUS = 500
 const DEFAULT_STREAK_REWARDS = [100, 150, 225, 325, 450, 600, 750]
@@ -58,6 +71,18 @@ type PendingForecastReward = {
   forecastTitle: string
   rewardCoins: number
   collected: boolean
+}
+
+type PersistedAppState = {
+  user?: UserProfile
+  forecasts?: Forecast[]
+  predictions?: Prediction[]
+  lovedIds?: string[]
+  ftueDone?: boolean
+  dailyStreak?: DailyStreakState
+  pendingLeaderboardRewards?: PendingLeaderboardReward[]
+  pendingForecastRewards?: PendingForecastReward[]
+  backofficeConfig?: BackofficeConfig
 }
 
 function localDayStamp(ts = Date.now()): string {
@@ -136,9 +161,25 @@ function savePendingForecastRewards(rewards: PendingForecastReward[]) {
   }
 }
 
-function defaultLeaderboardRewards() {
-  const entries = LEADERBOARD_SECTIONS.map((board) => [board.id, board.rewards] as const)
+function defaultLeaderboardRewardsFromSections(sections: LeaderboardSection[]) {
+  const entries = sections.map((board) => [board.id, board.rewards] as const)
   return Object.fromEntries(entries)
+}
+
+function buildInitialSharedPayload(): SharedGlobalPayload {
+  const leaderboardSections = cloneDefaultLeaderboardSections()
+  return {
+    schemaVersion: 1,
+    forecasts: MOCK_FORECASTS,
+    predictions: [],
+    backofficeConfig: {
+      welcomeBonusCoins: DEFAULT_WELCOME_BONUS,
+      streakRewards: [...DEFAULT_STREAK_REWARDS],
+      leaderboardRewards: defaultLeaderboardRewardsFromSections(leaderboardSections),
+      storeOffers: JSON.parse(JSON.stringify(DEFAULT_STORE_OFFERS)) as StoreOffer[],
+    },
+    leaderboardSections,
+  }
 }
 
 function loadBackofficeConfig(): BackofficeConfig {
@@ -148,7 +189,7 @@ function loadBackofficeConfig(): BackofficeConfig {
       return {
         welcomeBonusCoins: DEFAULT_WELCOME_BONUS,
         streakRewards: [...DEFAULT_STREAK_REWARDS],
-        leaderboardRewards: defaultLeaderboardRewards(),
+        leaderboardRewards: defaultLeaderboardRewardsFromSections(LEADERBOARD_SECTIONS),
         storeOffers: DEFAULT_STORE_OFFERS,
       }
     }
@@ -159,7 +200,7 @@ function loadBackofficeConfig(): BackofficeConfig {
       : [...DEFAULT_STREAK_REWARDS]
     while (streakRewards.length < 7) streakRewards.push(DEFAULT_STREAK_REWARDS[streakRewards.length])
     const leaderboardRewards = {
-      ...defaultLeaderboardRewards(),
+      ...defaultLeaderboardRewardsFromSections(LEADERBOARD_SECTIONS),
       ...(parsed.leaderboardRewards ?? {}),
     }
     const storeOffers = Array.isArray(parsed.storeOffers) && parsed.storeOffers.length > 0
@@ -176,7 +217,7 @@ function loadBackofficeConfig(): BackofficeConfig {
     return {
       welcomeBonusCoins: DEFAULT_WELCOME_BONUS,
       streakRewards: [...DEFAULT_STREAK_REWARDS],
-      leaderboardRewards: defaultLeaderboardRewards(),
+      leaderboardRewards: defaultLeaderboardRewardsFromSections(LEADERBOARD_SECTIONS),
       storeOffers: DEFAULT_STORE_OFFERS,
     }
   }
@@ -185,6 +226,25 @@ function loadBackofficeConfig(): BackofficeConfig {
 function saveBackofficeConfig(config: BackofficeConfig) {
   try {
     localStorage.setItem(BACKOFFICE_STORAGE_KEY, JSON.stringify(config))
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadPersistedAppState(): PersistedAppState {
+  try {
+    const raw = localStorage.getItem(APP_STATE_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as PersistedAppState
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function savePersistedAppState(state: PersistedAppState) {
+  try {
+    localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(state))
   } catch {
     /* ignore */
   }
@@ -254,10 +314,11 @@ const baseUser: UserProfile = {
 }
 
 function mergeInitialUser(): UserProfile {
+  const uid = isSharedCloudMode ? getOrCreateAnonUid() : baseUser.uid
   const saved = loadAvatarState()
   const profile = loadProfileState()
   const username = profile?.username ?? baseUser.username
-  if (!saved) return { ...baseUser, username }
+  if (!saved) return { ...baseUser, uid, username }
   const fromSave = saved.ownedAvatarIds.filter((id) => AVATAR_CATALOG.some((a) => a.id === id))
   const owned = new Set([...baseUser.ownedAvatarIds, ...fromSave])
   FREE_AVATAR_IDS.forEach((id) => owned.add(id))
@@ -268,6 +329,7 @@ function mergeInitialUser(): UserProfile {
   const avatarId = avatarOk ? saved.avatarId : baseUser.avatarId
   return {
     ...baseUser,
+    uid,
     username,
     avatarId,
     ownedAvatarIds: [...owned],
@@ -275,7 +337,13 @@ function mergeInitialUser(): UserProfile {
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile>(() => mergeInitialUser())
+  const persisted = useMemo(() => loadPersistedAppState(), [])
+
+  const [user, setUser] = useState<UserProfile>(() => {
+    const base = mergeInitialUser()
+    if (persisted.user) return { ...base, ...persisted.user, uid: base.uid }
+    return base
+  })
   const userRef = useRef(user)
   useEffect(() => {
     userRef.current = user
@@ -290,25 +358,154 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [user.username])
 
   const [rankAt] = useState(() => Date.now())
-  const [dailyStreak, setDailyStreak] = useState<DailyStreakState>(() => loadDailyStreakState())
+  const [dailyStreak, setDailyStreak] = useState<DailyStreakState>(
+    () => persisted.dailyStreak ?? loadDailyStreakState(),
+  )
   const [pendingLeaderboardRewards, setPendingLeaderboardRewards] = useState<PendingLeaderboardReward[]>(
-    () => loadPendingLeaderboardRewards(),
+    () => persisted.pendingLeaderboardRewards ?? loadPendingLeaderboardRewards(),
   )
   const [pendingForecastRewards, setPendingForecastRewards] = useState<PendingForecastReward[]>(
-    () => loadPendingForecastRewards(),
+    () => persisted.pendingForecastRewards ?? loadPendingForecastRewards(),
   )
-  const [backofficeConfig, setBackofficeConfig] = useState<BackofficeConfig>(() => loadBackofficeConfig())
+  const [leaderboardSections, setLeaderboardSections] = useState<LeaderboardSection[]>(() =>
+    cloneDefaultLeaderboardSections(),
+  )
 
-  const [forecasts, setForecasts] = useState<Forecast[]>(MOCK_FORECASTS)
-  const [predictions, setPredictions] = useState<Prediction[]>([])
-  const [lovedIds, setLovedIds] = useState<Set<string>>(new Set())
+  const [backofficeConfig, setBackofficeConfig] = useState<BackofficeConfig>(() => {
+    if (isSharedCloudMode) {
+      const sections = cloneDefaultLeaderboardSections()
+      return {
+        welcomeBonusCoins: DEFAULT_WELCOME_BONUS,
+        streakRewards: [...DEFAULT_STREAK_REWARDS],
+        leaderboardRewards: defaultLeaderboardRewardsFromSections(sections),
+        storeOffers: JSON.parse(JSON.stringify(DEFAULT_STORE_OFFERS)) as StoreOffer[],
+      }
+    }
+    return persisted.backofficeConfig ?? loadBackofficeConfig()
+  })
+
+  const [forecasts, setForecasts] = useState<Forecast[]>(() => {
+    if (isSharedCloudMode) return [...MOCK_FORECASTS]
+    return Array.isArray(persisted.forecasts) && persisted.forecasts.length > 0
+      ? persisted.forecasts
+      : MOCK_FORECASTS
+  })
+  const [predictions, setPredictions] = useState<Prediction[]>(() =>
+    isSharedCloudMode
+      ? []
+      : Array.isArray(persisted.predictions)
+        ? persisted.predictions
+        : [],
+  )
+
+  const applyingRemoteRef = useRef(false)
+  const lastPushedJsonRef = useRef<string | null>(null)
+  const [sharedCloudHydrated, setSharedCloudHydrated] = useState(!isSharedCloudMode)
+
+  const applySharedGlobalPayload = useCallback((payload: SharedGlobalPayload) => {
+    const json = JSON.stringify(payload)
+    if (json === lastPushedJsonRef.current) {
+      lastPushedJsonRef.current = null
+      return
+    }
+    applyingRemoteRef.current = true
+    setForecasts(payload.forecasts)
+    setPredictions(payload.predictions)
+    setBackofficeConfig(payload.backofficeConfig)
+    setLeaderboardSections(payload.leaderboardSections)
+    window.setTimeout(() => {
+      applyingRemoteRef.current = false
+    }, 0)
+  }, [])
+
+  useEffect(() => {
+    if (!isSharedCloudMode) return
+    let cancelled = false
+    ;(async () => {
+      const remote = await fetchSharedGlobalPayload()
+      if (cancelled) return
+      if (!remote) {
+        const initial = buildInitialSharedPayload()
+        applySharedGlobalPayload(initial)
+        await upsertSharedGlobalPayload(initial)
+      } else {
+        applySharedGlobalPayload(remote)
+      }
+      if (!cancelled) setSharedCloudHydrated(true)
+    })()
+
+    const unsub = subscribeSharedGlobal(() => {
+      void (async () => {
+        if (cancelled) return
+        const next = await fetchSharedGlobalPayload()
+        if (cancelled || !next) return
+        applySharedGlobalPayload(next)
+      })()
+    })
+
+    return () => {
+      cancelled = true
+      unsub()
+    }
+  }, [applySharedGlobalPayload])
+
+  useEffect(() => {
+    if (!isSharedCloudMode || !sharedCloudHydrated) return
+    const payload: SharedGlobalPayload = {
+      schemaVersion: 1,
+      forecasts,
+      predictions,
+      backofficeConfig,
+      leaderboardSections,
+    }
+    const t = window.setTimeout(() => {
+      if (applyingRemoteRef.current) return
+      const json = JSON.stringify(payload)
+      lastPushedJsonRef.current = json
+      void upsertSharedGlobalPayload(payload).then((ok) => {
+        if (ok) {
+          window.setTimeout(() => {
+            lastPushedJsonRef.current = null
+          }, 600)
+        } else {
+          lastPushedJsonRef.current = null
+        }
+      })
+    }, 500)
+    return () => window.clearTimeout(t)
+  }, [
+    isSharedCloudMode,
+    sharedCloudHydrated,
+    forecasts,
+    predictions,
+    backofficeConfig,
+    leaderboardSections,
+  ])
+
+  const [lovedIds, setLovedIds] = useState<Set<string>>(
+    () => new Set(Array.isArray(persisted.lovedIds) ? persisted.lovedIds : []),
+  )
   const [ftueDone, setFtueDone] = useState(() => {
+    if (typeof persisted.ftueDone === 'boolean') return persisted.ftueDone
     try {
       return localStorage.getItem('predictx_ftue') === '1'
     } catch {
       return false
     }
   })
+
+  const [settlementClockTick, setSettlementClockTick] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => setSettlementClockTick((t) => t + 1), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') setSettlementClockTick((t) => t + 1)
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
 
   useEffect(() => {
     saveDailyStreakState(dailyStreak)
@@ -323,8 +520,45 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [pendingForecastRewards])
 
   useEffect(() => {
+    if (isSharedCloudMode) return
     saveBackofficeConfig(backofficeConfig)
   }, [backofficeConfig])
+
+  useEffect(() => {
+    if (isSharedCloudMode) {
+      savePersistedAppState({
+        user,
+        lovedIds: [...lovedIds],
+        ftueDone,
+        dailyStreak,
+        pendingLeaderboardRewards,
+        pendingForecastRewards,
+      })
+      return
+    }
+    savePersistedAppState({
+      user,
+      forecasts,
+      predictions,
+      lovedIds: [...lovedIds],
+      ftueDone,
+      dailyStreak,
+      pendingLeaderboardRewards,
+      pendingForecastRewards,
+      backofficeConfig,
+    })
+  }, [
+    isSharedCloudMode,
+    user,
+    forecasts,
+    predictions,
+    lovedIds,
+    ftueDone,
+    dailyStreak,
+    pendingLeaderboardRewards,
+    pendingForecastRewards,
+    backofficeConfig,
+  ])
 
   useEffect(() => {
     const now = Date.now()
@@ -332,7 +566,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const known = new Set(prev.map((r) => r.id))
       const additions: PendingLeaderboardReward[] = []
 
-      LEADERBOARD_SECTIONS.forEach((board) => {
+      leaderboardSections.forEach((board) => {
         if (board.endsAt > now) return
         const winnerRow = board.rows.find((row) => row.username === user.username)
         if (!winnerRow) return
@@ -360,7 +594,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (additions.length === 0) return prev
       return [...additions, ...prev]
     })
-  }, [user.username, backofficeConfig.leaderboardRewards])
+  }, [user.username, backofficeConfig.leaderboardRewards, leaderboardSections])
 
   const rankedForecastIds = useMemo(() => {
     const ranked = rankForecasts(forecasts, rankAt, user.interests)
@@ -617,7 +851,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }),
     )
     const pred: Prediction = {
-      id: `p-${Date.now()}`,
+      id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       userId: u.uid,
       forecastId,
       optionId,
@@ -656,7 +890,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const createForecast = useCallback(
     (draft: CreateForecastDraft) => {
-      const id = `f-${Date.now()}`
+      const id = `f-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
       const u = userRef.current
       const hasImage = Boolean(draft.mediaImageDataUrl)
       const hasUserVideo = Boolean(draft.mediaVideoObjectUrl)
@@ -721,6 +955,53 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const expiredCreatedSettleCount = useMemo(() => {
+    const now = Date.now()
+    return forecasts.filter(
+      (f) => f.creatorId === user.uid && f.status === 'open' && f.endsAt < now,
+    ).length
+  }, [forecasts, user.uid, settlementClockTick])
+
+  const resolvedParticipatedCount = useMemo(() => {
+    const myForecastIds = new Set(
+      predictions.filter((p) => p.userId === user.uid).map((p) => p.forecastId),
+    )
+    if (myForecastIds.size === 0) return 0
+    let count = 0
+    forecasts.forEach((f) => {
+      if (f.status === 'resolved' && myForecastIds.has(f.id)) count += 1
+    })
+    return count
+  }, [predictions, forecasts, user.uid])
+
+  const prevExpiredSettleCountRef = useRef(0)
+  const settlementNotifReadyRef = useRef(false)
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return
+    if (!settlementNotifReadyRef.current) {
+      settlementNotifReadyRef.current = true
+      prevExpiredSettleCountRef.current = expiredCreatedSettleCount
+      return
+    }
+    const prev = prevExpiredSettleCountRef.current
+    if (expiredCreatedSettleCount > prev && expiredCreatedSettleCount > 0 && Notification.permission === 'granted') {
+      const body =
+        expiredCreatedSettleCount === 1
+          ? 'A forecast you created has ended — open PredictX to settle it.'
+          : `${expiredCreatedSettleCount} forecasts you created need settlement in PredictX.`
+      try {
+        new Notification('PredictX — settle your forecast', {
+          body,
+          tag: 'predictx-settle',
+          icon: '/favicon.svg',
+        })
+      } catch {
+        /* ignore */
+      }
+    }
+    prevExpiredSettleCountRef.current = expiredCreatedSettleCount
+  }, [expiredCreatedSettleCount])
+
   const value = useMemo(
     () => ({
       user,
@@ -733,9 +1014,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       welcomeBonusCoins: backofficeConfig.welcomeBonusCoins,
       streakRewards: backofficeConfig.streakRewards,
       storeOffers: backofficeConfig.storeOffers,
+      leaderboardSections,
       leaderboardRewards: backofficeConfig.leaderboardRewards,
       pendingForecastRewards,
       pendingLeaderboardRewards,
+      expiredCreatedSettleCount,
+      resolvedParticipatedCount,
       setInterests,
       updateUsername,
       updateWelcomeBonusCoins,
@@ -768,9 +1052,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       backofficeConfig.welcomeBonusCoins,
       backofficeConfig.streakRewards,
       backofficeConfig.storeOffers,
+      leaderboardSections,
       backofficeConfig.leaderboardRewards,
       pendingForecastRewards,
       pendingLeaderboardRewards,
+      expiredCreatedSettleCount,
+      resolvedParticipatedCount,
       setInterests,
       updateUsername,
       updateWelcomeBonusCoins,

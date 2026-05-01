@@ -142,3 +142,8 @@ export const LEADERBOARD_SECTIONS: LeaderboardSection[] = [
     ],
   },
 ]
+
+/** Deep clone of the default sections (used for initial / per-session leaderboard state). */
+export function cloneDefaultLeaderboardSections(): LeaderboardSection[] {
+  return JSON.parse(JSON.stringify(LEADERBOARD_SECTIONS)) as LeaderboardSection[]
+}

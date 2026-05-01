@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { LEADERBOARD_SECTIONS } from '../data/leaderboardMock'
 import { UserAvatar } from '../components/UserAvatar'
 import { useAppState } from '../context/useAppState'
 import { CoinIcon } from '../components/icons/CoinIcon'
@@ -16,7 +15,8 @@ function formatTimeLeft(endsAt: number, now: number) {
 }
 
 export function LeaderboardsPage() {
-  const { pendingLeaderboardRewards, collectLeaderboardReward, leaderboardRewards } = useAppState()
+  const { pendingLeaderboardRewards, collectLeaderboardReward, leaderboardRewards, leaderboardSections } =
+    useAppState()
   const [now, setNow] = useState(() => Date.now())
   const unclaimedRewards = pendingLeaderboardRewards.filter((r) => !r.collected)
 
@@ -61,7 +61,7 @@ export function LeaderboardsPage() {
           )}
         </section>
 
-        {LEADERBOARD_SECTIONS.map((section) => (
+        {leaderboardSections.map((section) => (
           <section key={section.id} className="lb-section">
             {/*
               Backoffice reward overrides apply immediately for display and payouts.

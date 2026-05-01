@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LEADERBOARD_SECTIONS } from '../data/leaderboardMock'
 import { useAppState } from '../context/useAppState'
 
 const BACKOFFICE_UNLOCK_KEY = 'predictx_backoffice_unlocked'
@@ -18,6 +17,7 @@ export function BackofficePage() {
     updateLeaderboardReward,
     reorderStoreOffers,
     updateStoreOffer,
+    leaderboardSections,
   } = useAppState()
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(BACKOFFICE_UNLOCK_KEY) === '1')
   const [password, setPassword] = useState('')
@@ -107,7 +107,7 @@ export function BackofficePage() {
         <section className="bo-section">
           <h2 className="section-title">3) Leaderboard winner rewards</h2>
           <div className="bo-board-list">
-            {LEADERBOARD_SECTIONS.map((board) => {
+            {leaderboardSections.map((board) => {
               const rewards = leaderboardRewards[board.id] ?? board.rewards
               return (
                 <article key={board.id} className="bo-card">

@@ -9,7 +9,7 @@ function statusLabel(status: 'open' | 'locked' | 'resolved' | 'cancelled') {
 }
 
 export function ForecastHistoryPage() {
-  const { user, forecasts, predictions } = useAppState()
+  const { user, forecasts, predictions, resolvedParticipatedCount } = useAppState()
 
   const createdByMe = useMemo(
     () =>
@@ -45,7 +45,14 @@ export function ForecastHistoryPage() {
   return (
     <div className="mobile-screen">
       <header className="mobile-screen__header">
-        <h1 className="screen-title">Forecasts history</h1>
+        <h1 className="screen-title screen-title--with-alert">
+          Forecasts history
+          {resolvedParticipatedCount > 0 && (
+            <span className="screen-title__alert" aria-hidden>
+              !
+            </span>
+          )}
+        </h1>
         <p className="screen-lead tight">Created and placed forecasts history.</p>
       </header>
       <div className="mobile-screen__scroll">
@@ -55,13 +62,20 @@ export function ForecastHistoryPage() {
         )}
         <div className="bo-board-list">
           {participated.map((f) => (
-            <article key={`participated-${f.id}`} className="bo-card">
+            <article
+              key={`participated-${f.id}`}
+              className={`bo-card${f.status === 'resolved' ? ' bo-card--history-alert' : ''}`}
+            >
               <strong>{f.title}</strong>
               <span className="muted small">Status: {statusLabel(f.status)}</span>
               <span className="muted small">Resolves {new Date(f.endsAt).toLocaleString()}</span>
               {f.status === 'resolved' && (
                 <span className="muted small">
                   Winner: {f.options.find((o) => o.id === f.resolvedOptionId)?.text ?? 'set'}
+                  <span className="bo-card__history-alert" aria-hidden>
+                    {' '}
+                    !
+                  </span>
                 </span>
               )}
             </article>

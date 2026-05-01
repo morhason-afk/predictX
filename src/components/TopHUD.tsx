@@ -9,7 +9,17 @@ type Props = {
 }
 
 export function TopHUD({ menuOpen, onMenuToggle }: Props) {
-  const { user } = useAppState()
+  const { user, expiredCreatedSettleCount, resolvedParticipatedCount } = useAppState()
+  const needsSettle = expiredCreatedSettleCount > 0
+  const needsHistoryAlert = resolvedParticipatedCount > 0
+  const hasMenuAlert = needsSettle || needsHistoryAlert
+  const menuLabel = menuOpen
+    ? 'Close menu'
+    : needsSettle
+      ? 'Open menu — settle created forecasts'
+      : needsHistoryAlert
+        ? 'Open menu — new settled forecasts in history'
+        : 'Open menu'
   return (
     <header className="top-hud">
       <div className="top-hud__brand">
@@ -29,17 +39,24 @@ export function TopHUD({ menuOpen, onMenuToggle }: Props) {
         <span className="top-hud__lvl-label">Lv</span>
         <span className="top-hud__lvl-num">{user.level}</span>
       </div>
-      <button
-        type="button"
-        className={`top-hud__menu-btn${menuOpen ? ' is-open' : ''}`}
-        aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-        aria-expanded={menuOpen}
-        onClick={onMenuToggle}
-      >
-        <span />
-        <span />
-        <span />
-      </button>
+      <span className="top-hud__menu-wrap">
+        <button
+          type="button"
+          className={`top-hud__menu-btn${menuOpen ? ' is-open' : ''}${hasMenuAlert ? ' has-alert' : ''}`}
+          aria-label={menuLabel}
+          aria-expanded={menuOpen}
+          onClick={onMenuToggle}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+        {hasMenuAlert && (
+          <span className="top-hud__alert-badge" aria-hidden>
+            !
+          </span>
+        )}
+      </span>
     </header>
   )
 }

@@ -1,4 +1,5 @@
 import { createContext } from 'react'
+import type { LeaderboardSection } from '../data/leaderboardMock'
 import type { Forecast, Prediction, UserProfile } from '../types'
 
 export type CreateForecastDraft = {
@@ -34,6 +35,7 @@ export type AppStateValue = {
   welcomeBonusCoins: number
   streakRewards: number[]
   storeOffers: StoreOffer[]
+  leaderboardSections: LeaderboardSection[]
   leaderboardRewards: Record<string, { first: number; second: number; third: number }>
   pendingForecastRewards: {
     id: string
@@ -52,6 +54,10 @@ export type AppStateValue = {
     cycleEndsAt: number
     collected: boolean
   }[]
+  /** Open forecasts you created whose `endsAt` is in the past — need settlement. */
+  expiredCreatedSettleCount: number
+  /** Resolved forecasts where current user has placed at least one prediction. */
+  resolvedParticipatedCount: number
   setInterests: (cats: string[]) => void
   updateUsername: (nextUsername: string) => boolean
   updateWelcomeBonusCoins: (coins: number) => void
